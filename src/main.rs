@@ -8,25 +8,29 @@ enum NeedleType {
     Attribute
 }
 
-fn find_in_tree<'a>(nodes: &'a Vec<html_parser::Node>, needle: &str, n_type: NeedleType) -> Option<&'a html_parser::Element> {
-    let mut m: Option<&html_parser::Element> = None;
+fn find_in_tree<'a>(nodes: &'a Vec<html_parser::Node>, needle: &str, n_type: NeedleType) -> Vec<&'a html_parser::Element> {
+    let mut elements: Vec<&html_parser::Element> = vec![];
     for n in nodes.iter() {
-        m = match n {
+        match n {
             html_parser::Node::Element(e) =>
                 match n_type {
-                    NeedleType::Id => if e.id == Some(needle.to_string()) { Some(e) } else { find_in_tree(&e.children, needle, n_type) },
-                    NeedleType::Name => if e.name == needle.to_string() { Some(e) } else { find_in_tree(&e.children, needle, n_type) },
-                    NeedleType::Class => if e.classes.contains(&needle.to_string()) { Some(e) } else { find_in_tree(&e.children, needle, n_type) },
-                    NeedleType::Attribute => if e.attributes.get(&needle.to_string()).is_some() { Some(e) } else { find_in_tree(&e.children, needle, n_type) },
+                    NeedleType::Id =>
+                        if e.id == Some(needle.to_string()) { elements.push(e) }
+                        else { elements.append(&mut find_in_tree(&e.children, needle, n_type)) },
+                    NeedleType::Name =>
+                        if e.name == needle.to_string() { elements.push(e) }
+                        else { elements.append(&mut find_in_tree(&e.children, needle, n_type)) },
+                    NeedleType::Class =>
+                        if e.classes.contains(&needle.to_string()) { elements.push(e) }
+                        else { elements.append(&mut find_in_tree(&e.children, needle, n_type)) },
+                    NeedleType::Attribute =>
+                        if e.attributes.get(&needle.to_string()).is_some() { elements.push(e) }
+                        else { elements.append(&mut find_in_tree(&e.children, needle, n_type)) },
                 }
-            _ => None,
+            _ => { },
         };
-        match m {
-            Some(_) => { break },
-            None => {}
-        }
     }
-    m
+    elements
 }
 
 fn extract_text(node: &html_parser::Node) -> String {
@@ -45,11 +49,20 @@ fn extract_text(node: &html_parser::Node) -> String {
 }
 
 fn print_node(node: &html_parser::Node) {
-    println!("{:#?}",
-                html_escape::decode_html_entities(
-                    &extract_text(node)
-        )
+    println!("{}",
+        html_escape::decode_html_entities(
+            &extract_text(node)
+        ).trim()
     )
+}
+
+fn print_word(el: &html_parser::Element) {
+    // multiple definitions
+    for row in find_in_tree(
+                    &vec!(html_parser::Node::Element(el.clone())),
+                    &"td", NeedleType::Name) {
+        print_node(&html_parser::Node::Element(row.clone()));
+    }
 }
 
 #[tokio::main]
@@ -66,10 +79,13 @@ async fn search(word: &str) -> Result<(), Box<dyn std::error::Error>> {
             .await?;
     
         let p = html_parser::Dom::parse(&resp)?;
-        let e = find_in_tree(&p.children, &"definicija", NeedleType::Id);
-        match e {
-            Some(inner) => print_node(&html_parser::Node::Element(inner.clone())),
-            None => println!("Nema tražene riječi.")
+        let elements = find_in_tree(&p.children, &"definicija", NeedleType::Id);
+        if elements.len() == 0 {    
+            println!("Nema tražene riječi.");
+        } else {
+            for r in elements.into_iter() {
+                print_word(r);
+            }
         }
     Ok(())
 }
@@ -78,7 +94,7 @@ fn main() {
     let matches = App::new("HJPcli")
         .version("0.1")
         .author("Andrej Dundović <andrej@dundovic.com.hr>")
-        .about("Command line interface for HJP")
+        .about("A command line interface for the Croatian Language Portal (HJP)")
         .arg(Arg::new("WORD")
             .about("Sets the search word")
             .required(true)
