@@ -67,7 +67,7 @@ fn print_word(el: &html_parser::Element) {
 pub async fn search(word: &str) -> Result<(), Box<dyn std::error::Error>> {
         let params = [("word", word), ("search", &"Pretraga".to_string())];
 
-        let url = url::Url::parse("http://hjp.znanje.hr/index.php?show=search")?;
+        let url = url::Url::parse("https://hjp.znanje.hr/index.php?show=search")?;
         let client = reqwest::Client::new();
         let resp = client.post(url)
             .form(&params)
@@ -75,7 +75,7 @@ pub async fn search(word: &str) -> Result<(), Box<dyn std::error::Error>> {
             .await?
             .text()
             .await?;
-    
+   
         let p = html_parser::Dom::parse(&resp)?;
         let elements = find_in_tree(&p.children, &"definicija", NeedleType::Id);
         if elements.len() == 0 {    
